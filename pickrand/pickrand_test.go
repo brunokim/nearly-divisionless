@@ -1,9 +1,35 @@
 package pickrand_test
 
 import (
-	"brunokim.xyz/pickrand"
+	"math"
+	"sort"
 	"testing"
+	"testing/quick"
+
+	"brunokim.xyz/pickrand"
 )
+
+// Naive, inefficient, but probably correct multiplication implementation.
+func naiveMul64(x, y uint64) pickrand.Uint128 {
+	m := pickrand.Uint128{0, 0}
+
+	for i := uint(0); i < 64; i++ {
+		lsb := y % 2
+		y = y >> 1
+		if lsb == 0 {
+			continue
+		}
+		newLo := m.Lo + (x << i)
+		if newLo < m.Lo {
+			// Overflow; there's a carry from lo to hi.
+			m.Hi += 1
+		}
+		m.Lo = newLo
+
+		m.Hi += x >> (64 - i)
+	}
+	return m
+}
 
 func TestMul64(t *testing.T) {
 	tests := []struct {
@@ -21,6 +47,136 @@ func TestMul64(t *testing.T) {
 		got := pickrand.Mul64(test.x, test.y)
 		if got != test.want {
 			t.Errorf("%s: %016x * %016x = %v (want %v)", test.desc, test.x, test.y, got, test.want)
+		}
+		got = naiveMul64(test.x, test.y)
+		if got != test.want {
+			t.Errorf("%s (naive): %016x * %016x = %v (want %v)", test.desc, test.x, test.y, got, test.want)
+		}
+	}
+}
+
+func TestQuickMul64(t *testing.T) {
+	if err := quick.CheckEqual(pickrand.Mul64, naiveMul64, nil); err != nil {
+		err := err.(*quick.CheckEqualError)
+		x, y := err.In[0], err.In[1]
+		out1, out2 := err.Out1[0], err.Out2[0]
+		t.Errorf("quick check #%d failure: pickrand.Mul64(%016x, %016x) = %v, naiveMul64(%016x, %016x) = %v", err.Count, x, y, out1, x, y, out2)
+	}
+}
+
+type entry struct {
+	x    float64
+	freq float64
+}
+
+func frequency(samples []uint64, s uint64) []entry {
+	total := len(samples)
+	// Count number of occurrences per sample.
+	freq := make(map[uint64]int)
+	for _, x := range samples {
+		freq[x]++
+	}
+	// Normalize frequency and range to obtain a PDF over [0,1).
+	arr := make([]entry, len(freq))
+	i := 0
+	for x, count := range freq {
+		arr[i] = entry{float64(x+1) / float64(s), float64(count) / float64(total)}
+		i++
+	}
+	// Sort by x to facilitate computing the CDF.
+	sort.Slice(arr, func(i, j int) bool {
+		return arr[i].x < arr[j].x
+	})
+	return arr
+}
+
+// The K-S statistic computes the maximum y difference between a sampled CDF and
+// its expected CDF, adjusted by the (sqrt of) number of samples.
+//
+// In this case, the expected CDF is simply y = x, for the uniform distribution in [0,1].
+func kolmogorovSmirnovStatistic(samples []uint64, s uint64) float64 {
+	n := len(samples)
+	freq := frequency(samples, s)
+
+	acc := 0.0
+	maxDiff := 0.0
+	for _, entry := range freq {
+		acc += entry.freq
+		diff := math.Abs(acc - entry.x)
+		if diff > maxDiff {
+			maxDiff = diff
+		}
+	}
+	return math.Sqrt(float64(n)) * maxDiff
+}
+
+// This thresold was chosen such that the following tests should produce a false negative
+// just 0.1% of the time, based on the following percentiles for the K-S statistic:
+//
+//     p25:   0.655
+//     p50:   0.806
+//     p90:   1.2
+//     p99:   1.61
+//     p99.9: 1.95
+//
+// This table was obtained empirically, with 100,000 trials where on each one we generated
+// a list of 1000 random integers between [0, 2^32) using Python's "random" package.
+const ksThreshold = 2.0
+
+func TestUint32n(t *testing.T) {
+	tests := []struct {
+		desc string
+		s    uint32
+	}{
+		{"Constant", 1},
+		{"1 bit", 2},
+		{"1/2 of space", 1<<31 + 1},
+		{"2/3 of space", 0xAAAAAAAA},
+	}
+
+	for _, test := range tests {
+		n := 1000
+		samples := make([]uint64, n)
+		for i := 0; i < n; i++ {
+			samples[i] = uint64(pickrand.Uint32n(test.s))
+		}
+		ks := kolmogorovSmirnovStatistic(samples, uint64(test.s))
+		t.Logf("%d samples from [0, %#x) K-S statistic = %.4f\n", n, test.s, ks)
+
+		if ks > ksThreshold {
+			for _, entry := range frequency(samples, uint64(test.s)) {
+				t.Logf("%.4f %.4f\n", entry.x, entry.freq)
+			}
+			t.Errorf("%s: K-S test failed", test.desc)
+		}
+	}
+}
+
+func TestUint64n(t *testing.T) {
+	tests := []struct {
+		desc string
+		s    uint64
+	}{
+		{"Constant", 1},
+		{"1 bit", 2},
+		{"1/2 of space", 1<<63 + 1},
+		{"2/3 of space", 0xAAAAAAAAAAAAAAAA},
+	}
+
+	for _, test := range tests {
+		n := 1000
+		samples := make([]uint64, n)
+		for i := 0; i < n; i++ {
+			samples[i] = pickrand.Uint64n(test.s)
+		}
+		ks := kolmogorovSmirnovStatistic(samples, test.s)
+		t.Logf("%d samples from [0, %#x) K-S statistic = %.4f\n", n, test.s, ks)
+
+		if ks > ksThreshold {
+			for _, entry := range frequency(samples, test.s) {
+				t.Logf("%.4f %.4f\n", entry.x, entry.freq)
+			}
+			t.Errorf("%s: K-S test failed", test.desc)
 		}
 	}
 }
