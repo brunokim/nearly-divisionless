@@ -22,6 +22,7 @@ func main() {
 	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 
+	fmt.Printf("n = %d, k = %d\n\n", *n, *k)
 	edges := scaleFreeNetwork(*n, *k)
 
 	degrees := make([]int, *n)
@@ -60,15 +61,15 @@ func main() {
 
 // Create a random scale-free network with n vertices and k*n edges.
 //
-// The degree distribution of a scale-free network follows a power law,
-// with remarkable inequality in edge assignment. The algorithm used for
-// this network is the Barabási-Albert model, with resulting power law
-// coefficient of ~3.
+// The degree distribution of a scale-free network follows a power law, with
+// remarkable inequality in edge assignment. The algorithm used for this network
+// is the Barabási-Albert model, with resulting degree distribution of P(k) ~ k^-3
+// (or: there are 1000x less vertices with degree 10*d than vertices with degree d).
 func scaleFreeNetwork(n, k uint64) []Edge {
 	edges := make([]Edge, n*k)
 	i := uint64(0)
 
-	// Create initial k-clique
+	// Create initial (k+1)-clique
 	for u := uint64(0); u <= k; u++ {
 		for v := u + 1; v <= k; v++ {
 			edges[i] = Edge{u, v}
@@ -96,6 +97,7 @@ func scaleFreeNetwork(n, k uint64) []Edge {
 	return edges
 }
 
+// Greedy algorithm to obtain a set cover.
 func cover(edges []Edge) map[uint64]int {
 	neighbors := func(u uint64) []uint64 {
 		vs := make([]uint64, 0)

@@ -90,11 +90,11 @@ func frequency(samples []uint64, s uint64) []entry {
 	return arr
 }
 
-// The K-S statistic computes the maximum y difference between a sampled CDF and
-// its expected CDF, adjusted by the (sqrt of) number of samples.
+// The Kolmorogov-Smirnov (K-S) statistic computes the maximum y difference
+// between a sampled CDF and its expected CDF, adjusted by the (sqrt of) number of samples.
 //
 // In this case, the expected CDF is simply y = x, for the uniform distribution in [0,1].
-func kolmogorovSmirnovStatistic(samples []uint64, s uint64) float64 {
+func ksStatistic(samples []uint64, s uint64) float64 {
 	n := len(samples)
 	freq := frequency(samples, s)
 
@@ -110,17 +110,19 @@ func kolmogorovSmirnovStatistic(samples []uint64, s uint64) float64 {
 	return math.Sqrt(float64(n)) * maxDiff
 }
 
-// This thresold was chosen such that the following tests should produce a false negative
-// just 0.1% of the time, based on the following percentiles for the K-S statistic:
+// ksThreshold is the maximum value of the K-S statistic we accept from a sample
+// of 1000 values to be still classified as uniform, with 99.9% confidence.
+//
+// This thresold was obtained empirically, by running 100,000 trials where on
+// each one we generated a list of 1000 random integers between [0, 2^32) using
+// Python's "random" package, and then computed their K-S statistic. The distribution
+// of the statistic is summarized in the following percentiles:
 //
 //     p25:   0.655
 //     p50:   0.806
-//     p90:   1.2
+//     p90:   1.20
 //     p99:   1.61
 //     p99.9: 1.95
-//
-// This table was obtained empirically, with 100,000 trials where on each one we generated
-// a list of 1000 random integers between [0, 2^32) using Python's "random" package.
 const ksThreshold = 2.0
 
 func TestUint32n(t *testing.T) {
@@ -140,7 +142,7 @@ func TestUint32n(t *testing.T) {
 		for i := 0; i < n; i++ {
 			samples[i] = uint64(pickrand.Uint32n(test.s))
 		}
-		ks := kolmogorovSmirnovStatistic(samples, uint64(test.s))
+		ks := ksStatistic(samples, uint64(test.s))
 		t.Logf("%d samples from [0, %#x) K-S statistic = %.4f\n", n, test.s, ks)
 
 		if ks > ksThreshold {
@@ -169,7 +171,7 @@ func TestUint64n(t *testing.T) {
 		for i := 0; i < n; i++ {
 			samples[i] = pickrand.Uint64n(test.s)
 		}
-		ks := kolmogorovSmirnovStatistic(samples, test.s)
+		ks := ksStatistic(samples, test.s)
 		t.Logf("%d samples from [0, %#x) K-S statistic = %.4f\n", n, test.s, ks)
 
 		if ks > ksThreshold {

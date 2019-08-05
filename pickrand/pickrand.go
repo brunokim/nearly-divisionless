@@ -32,10 +32,12 @@ func (u Uint128) String() string {
 	return fmt.Sprintf("%016x%016x", u.Hi, u.Lo)
 }
 
-// Mul64 multiplies two 64-bit uints keeping full precision, returning the result in a 128-bit uint.
+// Mul64 multiplies two 64-bit uints keeping full precision, returning the
+// result in a 128-bit uint.
 func Mul64(x, y uint64) Uint128 {
-	// Full precision is accomplished by working on the halfs of each number, performing multiplications with
-	// 32 significant bits (resulting in 64 bit numbers) and addition in 64 bits.
+	// Full precision is accomplished by working on the halfs of each number,
+	// performing multiplications with 32 significant bits (resulting in 64 bit
+	// numbers) and addition in 64 bits.
 	//
 	// x = xHi * 2^32 + xLo
 	// y = yHi * 2^32 + yLo
@@ -52,11 +54,11 @@ func Mul64(x, y uint64) Uint128 {
 	c := xLo * yHi
 	d := xHi * yHi
 
-	// The result number m is composed by adding each hi and lo part of the summation terms.
-	// Note that there may be a carry from the pointed column to the next.
+	// The result number m is composed by adding each hi and lo part of the
+	// summation terms. Note that there may be a carry from the pointed column
+	// to the next.
 	//
-	//                  |
-	//                  V
+	//                  ↓
 	//               [ aHi | aLo ]
 	//         [ bHi | bLo ]
 	//         [ cHi | cLo ]
