@@ -83,12 +83,19 @@ func scaleFreeNetwork(n, k uint64) []Edge {
 	// degree.
 	for u := k + 1; u < n; u++ {
 		numEdges := i
+		alreadySelected := make(map[uint64]bool)
 		for cnt := uint64(0); cnt < k; cnt++ {
-			edgeIdx := pickrand.Uint64n(numEdges)
-			edge := edges[edgeIdx]
-			endpoint := pickrand.Uint64n(2)
-			v := edge[endpoint]
-
+			var v uint64
+			for {
+				edgeIdx := pickrand.Uint64n(numEdges)
+				edge := edges[edgeIdx]
+				endpoint := pickrand.Uint64n(2)
+				v = edge[endpoint]
+				if !alreadySelected[v] {
+					break
+				}
+			}
+			selected[v] = true
 			edges[i] = Edge{u, v}
 			i++
 		}
