@@ -1,12 +1,11 @@
 package pickrand_test
 
 import (
-	"math"
-	"sort"
 	"testing"
 	"testing/quick"
 
 	"brunokim.xyz/pickrand"
+	"brunokim.xyz/stats"
 )
 
 // Naive, inefficient, but probably correct multiplication implementation.
@@ -64,52 +63,6 @@ func TestQuickMul64(t *testing.T) {
 	}
 }
 
-type entry struct {
-	x    float64
-	freq float64
-}
-
-func frequency(samples []uint64, s uint64) []entry {
-	total := len(samples)
-	// Count number of occurrences per sample.
-	freq := make(map[uint64]int)
-	for _, x := range samples {
-		freq[x]++
-	}
-	// Normalize frequency and range to obtain a PDF over [0,1).
-	arr := make([]entry, len(freq))
-	i := 0
-	for x, count := range freq {
-		arr[i] = entry{float64(x+1) / float64(s), float64(count) / float64(total)}
-		i++
-	}
-	// Sort by x to facilitate computing the CDF.
-	sort.Slice(arr, func(i, j int) bool {
-		return arr[i].x < arr[j].x
-	})
-	return arr
-}
-
-// The Kolmorogov-Smirnov (K-S) statistic computes the maximum y difference
-// between a sampled CDF and its expected CDF, adjusted by the (sqrt of) number of samples.
-//
-// In this case, the expected CDF is simply y = x, for the uniform distribution in [0,1].
-func ksStatistic(samples []uint64, s uint64) float64 {
-	n := len(samples)
-	freq := frequency(samples, s)
-
-	acc := 0.0
-	maxDiff := 0.0
-	for _, entry := range freq {
-		acc += entry.freq
-		diff := math.Abs(acc - entry.x)
-		if diff > maxDiff {
-			maxDiff = diff
-		}
-	}
-	return math.Sqrt(float64(n)) * maxDiff
-}
-
 // ksThreshold is the maximum value of the K-S statistic we accept from a sample
 // of 1000 values to be still classified as uniform, with 99.9% confidence.
 //
@@ -142,13 +95,10 @@ func TestUint32n(t *testing.T) {
 		for i := 0; i < n; i++ {
 			samples[i] = uint64(pickrand.Uint32n(test.s))
 		}
-		ks := ksStatistic(samples, uint64(test.s))
+		ks := stats.KSUnitUniformStatistic(samples, uint64(test.s))
 		t.Logf("%d samples from [0, %#x) K-S statistic = %.4f\n", n, test.s, ks)
 
 		if ks > ksThreshold {
-			for _, entry := range frequency(samples, uint64(test.s)) {
-				t.Logf("%.4f %.4f\n", entry.x, entry.freq)
-			}
 			t.Errorf("%s: K-S test failed", test.desc)
 		}
 	}
@@ -171,13 +121,10 @@ func TestUint64n(t *testing.T) {
 		for i := 0; i < n; i++ {
 			samples[i] = pickrand.Uint64n(test.s)
 		}
-		ks := ksStatistic(samples, test.s)
+		ks := stats.KSUnitUniformStatistic(samples, uint64(test.s))
 		t.Logf("%d samples from [0, %#x) K-S statistic = %.4f\n", n, test.s, ks)
 
 		if ks > ksThreshold {
-			for _, entry := range frequency(samples, test.s) {
-				t.Logf("%.4f %.4f\n", entry.x, entry.freq)
-			}
 			t.Errorf("%s: K-S test failed", test.desc)
 		}
 	}

@@ -95,7 +95,7 @@ func scaleFreeNetwork(n, k uint64) []Edge {
 					break
 				}
 			}
-			selected[v] = true
+			alreadySelected[v] = true
 			edges[i] = Edge{u, v}
 			i++
 		}
