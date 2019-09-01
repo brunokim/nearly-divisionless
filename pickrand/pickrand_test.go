@@ -95,10 +95,13 @@ func TestUint32n(t *testing.T) {
 		for i := 0; i < n; i++ {
 			samples[i] = uint64(pickrand.Uint32n(test.s))
 		}
-		ks := stats.KSUnitUniformStatistic(samples, uint64(test.s))
+		ks := stats.KSUniformStatistic(samples, uint64(test.s))
 		t.Logf("%d samples from [0, %#x) K-S statistic = %.4f\n", n, test.s, ks)
 
 		if ks > ksThreshold {
+			for _, p := range stats.Frequency(samples) {
+				t.Logf("%.0f: %.4f", p.X, p.Y)
+			}
 			t.Errorf("%s: K-S test failed", test.desc)
 		}
 	}
@@ -121,10 +124,13 @@ func TestUint64n(t *testing.T) {
 		for i := 0; i < n; i++ {
 			samples[i] = pickrand.Uint64n(test.s)
 		}
-		ks := stats.KSUnitUniformStatistic(samples, uint64(test.s))
+		ks := stats.KSUniformStatistic(samples, uint64(test.s))
 		t.Logf("%d samples from [0, %#x) K-S statistic = %.4f\n", n, test.s, ks)
 
 		if ks > ksThreshold {
+			for _, p := range stats.Frequency(samples) {
+				t.Logf("%.0f: %.4f", p.X, p.Y)
+			}
 			t.Errorf("%s: K-S test failed", test.desc)
 		}
 	}

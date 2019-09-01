@@ -5,39 +5,41 @@ import (
 	"sort"
 )
 
-type point struct {
-	x, y float64
+// Point represents a cartesian point.
+type Point struct {
+	X, Y float64
 }
 
-// Compute the relative frequency of the given samples in the [0, maximum) domain.
-func pdf(samples []uint64, maximum uint64) []point {
+// Frequency returns the relative frequency of the given samples, sorted by x.
+func Frequency(samples []uint64) []Point {
 	total := len(samples)
-	// Count number of occurrences per sample.
+	// Count occurrences in array.
 	freq := make(map[uint64]int)
 	for _, x := range samples {
 		freq[x]++
 	}
-	// Normalize frequency and range to obtain a PDF over [0,1).
-	arr := make([]point, len(freq))
+	// Compute relative frequency.
+	arr := make([]Point, len(freq))
 	i := 0
 	for x, count := range freq {
-		arr[i] = point{float64(x+1) / float64(maximum), float64(count) / float64(total)}
+		arr[i] = Point{float64(x + 1), float64(count) / float64(total)}
 		i++
 	}
+	// Sort slice for better presentation, and to ease computing the CDF.
+	sort.Slice(arr, func(i, j int) bool {
+		return arr[i].X < arr[j].X
+	})
 	return arr
 }
 
-// Compute the cumulative density function of the given samples in the [0, maximum) domain.
-func cdf(samples []uint64, maximum uint64) []point {
-	arr := pdf(samples, maximum)
-	sort.Slice(arr, func(i, j int) bool {
-		return arr[i].x < arr[j].x
-	})
-	cumulative := make([]point, len(arr))
+// Cumulative returns the cumulative frequency of the given samples, sorted by x.
+func Cumulative(samples []uint64) []Point {
+	arr := Frequency(samples)
+	cumulative := make([]Point, len(arr))
 	acc := 0.0
-	for i, e := range arr {
-		cumulative[i] = point{e.x, acc + e.y}
-		acc += e.y
+	for i, p := range arr {
+		cumulative[i] = Point{p.X, acc + p.Y}
+		acc += p.Y
 	}
 	return cumulative
 }
@@ -45,14 +47,15 @@ func cdf(samples []uint64, maximum uint64) []point {
 // The Kolmorogov-Smirnov (K-S) statistic computes the maximum y difference
 // between a sampled CDF and its expected CDF, adjusted by the (sqrt of) number of samples.
 //
-// In this case, the expected CDF is y = x, for the uniform distribution in [0,1].
-func KSUnitUniformStatistic(samples []uint64, maximum uint64) float64 {
+// In this case, the expected CDF is y = x/max, for the uniform distribution in [0, max].
+func KSUniformStatistic(samples []uint64, max uint64) float64 {
 	n := len(samples)
-	cdf := cdf(samples, maximum)
+	cdf := Cumulative(samples)
 
 	maxDiff := 0.0
 	for _, f := range cdf {
-		diff := math.Abs(f.y - f.x) // f.y = sampled, f.x = expected
+		expected := f.X / float64(max)
+		diff := math.Abs(f.Y - expected)
 		if diff > maxDiff {
 			maxDiff = diff
 		}
